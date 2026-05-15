@@ -2,6 +2,8 @@
 
 A system that submits logs from external source to a local LLM (via Ollama) and returns a structured risk assessment.
 
+Click in the image bellow to open the video demonstration👇👇
+[![Watch the video](https://img.youtube.com/vi/yGAZ4mpaths/maxresdefault.jpg)](https://youtu.be/yGAZ4mpaths)
 ---
 
 ## Table of Contents
