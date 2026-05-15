@@ -232,29 +232,15 @@ Unit tests for the sensitive data scanner. Organised by category: credential key
 
 ## What I would improve given more time
 
-### Force structured output from the LLM
-Ollama supports a `format: "json"` parameter that constrains the model to always emit valid JSON. Newer Ollama versions also accept a full JSON Schema in the `format` field, which would eliminate most schema violations before they reach the validation layer and reduce wasted retries.
-
-### Replace the threading worker with a proper task queue
-The single daemon thread has no observability, no back-pressure, no dead-letter queue, and no horizontal scalability. Celery (with Redis or RabbitMQ) or RQ would add all of these and allow running multiple workers in parallel without touching the Flask code.
-
-### Retry history per alert
-Retrying an `ERROR` alert today resets `analysis_result` to `null` and discards the previous error reason. Storing a log of attempts (number, timestamp, error message, raw LLM output) per alert would make debugging failed analyses much easier.
-
 ### Authentication and authorisation
 Every endpoint is open. At minimum, API key authentication checked in a `before_request` hook and a basic read-only vs. submit role model are required before any real deployment.
 
-### PostgreSQL (or another production database)
-SQLite serialises all writes and does not handle concurrent readers well. Moving to Postgres (with Alembic for migrations) would unlock connection pooling, proper concurrent access, and JSONB indexing on the `analysis_result` column.
+### Improve the analysis prompt
+The current prompt already meets some demands, but it would need significant refinement to function more perfectly.
 
-### Structured logging and observability
-There is currently no application-level logging. Adding structured logs (e.g., `structlog`) with a correlation ID per alert and a `/metrics` Prometheus endpoint would make it straightforward to trace slow or failing analyses in production.
+### Improve the code as a whole
+Simplify the entire code structure, making it easier to understand and simpler to solve future problems.
 
-### Test coverage for schema validation
-The `AnalysisResult.model_validate()` call added to `_attempt_analysis()` is not yet covered by tests. Cases worth adding: an invalid `risk_assessment` value, a `confidence` outside `[0, 1]`, and a missing `summary` — all should raise `ValueError` and trigger a retry.
+### Implement more consistent tests and lifechecks
+Adjust the lifechecks so that they are not unit tests and more clearly show when something is not working.
 
-### Alert deduplication
-Every submission is stored independently. Hashing `(source, severity, description, artifacts)` could detect duplicates and either merge them or return the existing alert ID, reducing LLM load on repeated or noisy alerts.
-
-### Pagination on `/alerts`
-The endpoint has a hard limit of 200 rows. Cursor- or offset-based pagination with total-count headers is necessary once the database grows beyond a few hundred records.
