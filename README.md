@@ -43,8 +43,8 @@ Requires [Docker](https://docs.docker.com/get-docker/) with Compose v2.
 
 ```bash
 # Clone the repo
-git clone <repo-url>
-cd job_test_3
+git clone https://github.com/rafaelsorgato/DFIR-AUTOMATION-Challenge.git
+cd DFIR-AUTOMATION-Challenge
 
 # Create your local config from the template
 cp .env.example .env
@@ -73,9 +73,13 @@ The app is available at `http://localhost:5000`.
 
 ### Option B — Local Python environment
 
-Requires Python 3.12+ and a running [Ollama](https://ollama.com) instance.
+Requires Python and a running [Ollama](https://ollama.com) instance.
 
 ```bash
+# Clone the repo
+git clone https://github.com/rafaelsorgato/DFIR-AUTOMATION-Challenge.git
+cd DFIR-AUTOMATION-Challenge
+
 # 1. Create your local config from the template
 cp .env.example .env
 # Edit .env if you want to change the model or other settings
