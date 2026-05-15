@@ -1,0 +1,58 @@
+services:
+
+  # ── Ollama LLM server ──────────────────────────────────────────
+  ollama:
+    build:
+      context: .
+      dockerfile: ollama.Dockerfile
+    container_name: alert-analyzer-ollama
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+    volumes:
+      # Models are stored here so they survive container restarts
+      - ollama_data:/root/.ollama
+    # GPU support (NVIDIA) — uncomment the block below if you have a compatible GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      # Passes only after the model has been fully downloaded
+      test: ["CMD-SHELL", "test -f /tmp/model-ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Grace period for the initial model download.
+      # Increase this value if you have a slow internet connection.
+      start_period: 1800s
+
+  # ── Flask alert-analyzer app ───────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alert-analyzer-app
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT}
+      OLLAMA_RATE_LIMIT_PER_MINUTE: ${OLLAMA_RATE_LIMIT_PER_MINUTE}
+      MAX_RETRIES: ${MAX_RETRIES}
+      # Overrides DATABASE_URL from .env — containers use the Docker volume path
+      DATABASE_URL: sqlite:////app/data/alerts.db
+    volumes:
+      # SQLite database persists across container restarts
+      - app_data:/app/data
+    ports:
+      - "5000:5000"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  app_data:

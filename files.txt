@@ -1,0 +1,113 @@
+ALERT ANALYZER — DESCRIÇÃO DOS ARQUIVOS
+========================================
+
+RAIZ DO PROJETO
+---------------
+
+app.py
+    Servidor Flask. Define todas as rotas da API REST (/analyze, /analysis/<id>,
+    /alerts, /alerts/retry-errors, /alerts/<id>/retry, /schema/alert,
+    /schema/analysis, /stream, /health, /health/run).
+    Também contém o worker em background que consome a fila de alertas pendentes
+    e o publisher de eventos SSE para atualização em tempo real no navegador.
+
+config.py
+    Ponto único de leitura de variáveis de ambiente. Carrega o arquivo .env via
+    python-dotenv e expõe as configurações como constantes tipadas:
+    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT, OLLAMA_RATE_LIMIT, MAX_RETRIES,
+    DATABASE_URL. Todos os outros módulos importam daqui — nenhum chama
+    os.getenv() diretamente.
+
+llm_service.py
+    Integração com o modelo de linguagem via LangChain + Ollama. Contém o prompt
+    do sistema (papel de analista SOC/DFIR), a função de extração e normalização
+    do JSON retornado pelo modelo, a validação do schema da resposta com Pydantic
+    e a lógica de retry (até MAX_RETRIES tentativas). Exporta generate_analysis(),
+    que é chamada pelo worker em app.py.
+
+db.py
+    Configuração do banco de dados via SQLAlchemy. Define o modelo Alert (tabela
+    'alerts') com todos os campos (id, source, severity, description, artifacts,
+    status, analysis_result, timestamps) e a função init_db() que cria as tabelas
+    na primeira execução.
+
+models.py
+    Schemas Pydantic para validação de entrada e saída:
+    - AlertCreate: valida o corpo do POST /analyze (source, severity, description,
+      artifacts) e rejeita campos extras.
+    - AnalysisResult: valida a resposta do LLM (risk_assessment, summary,
+      recommended_actions, confidence).
+    - AlertResponse: schema completo de retorno de um alerta pela API.
+
+security.py
+    Scanner de dados sensíveis baseado em expressões regulares. Detecta
+    credenciais (password=, token=, api_key=...), chaves privadas PEM,
+    access keys da AWS, tokens do GitHub/Google/Slack, strings de conexão com
+    credenciais embutidas e cabeçalhos Authorization. É chamado antes de persistir
+    qualquer alerta para garantir que segredos não entrem no banco ou no contexto
+    do LLM.
+
+tests_runner.py
+    Runner de pytest em subprocesso, usado pelo endpoint /health/run. Roda a
+    suite de testes de forma isolada (sem tocar nos globals da aplicação em
+    produção) e grava o resultado em um arquivo JSON temporário, que o endpoint
+    lê e devolve como resposta.
+
+requirements.txt
+    Dependências Python do projeto com versões fixas: Flask, Flasgger (Swagger),
+    SQLAlchemy, Pydantic, LangChain (core + Ollama), python-dotenv, pytest.
+
+.env.example
+    Template do arquivo .env para servir de referência a novos desenvolvedores.
+
+README.md
+    Documentação principal do projeto. Contém visão geral, diagrama de
+    arquitetura, instruções de instalação (Docker Compose e ambiente local),
+    exemplos de uso da API e dashboard, como rodar os testes, variáveis de
+    ambiente disponíveis, decisões de design e melhorias futuras.
+
+DOCKER
+------
+
+Dockerfile
+    Imagem Docker da aplicação Flask. Parte de python:3.12-slim, instala as
+    dependências do requirements.txt, copia o código e expõe a porta 5000.
+
+ollama.Dockerfile
+    Imagem Docker do servidor Ollama. Estende a imagem oficial ollama/ollama e
+    adiciona o script de entrypoint customizado.
+
+ollama-entrypoint.sh
+    Script de inicialização do container Ollama. Sobe o servidor Ollama em
+    background, aguarda ele ficar pronto, faz o pull do modelo definido em
+    OLLAMA_MODEL (se ainda não existir no volume) e sinaliza que está pronto
+    criando o arquivo /tmp/model-ready (usado pelo healthcheck do Docker Compose).
+
+docker-compose.yml
+    Orquestra os dois serviços: 'ollama' (servidor do modelo) e 'app' (Flask).
+    O serviço 'app' só sobe após o healthcheck do 'ollama' passar. Volumes
+    persistem o banco de dados e os modelos baixados entre reinicializações.
+    Lê as variáveis de configuração do arquivo .env automaticamente.
+
+TESTES
+------
+
+tests/test_app.py
+    Testes de integração das rotas Flask. Usa um banco SQLite em memória
+    temporário e mocka o worker e o LLM para testar validação de payload,
+    criação de alertas, IDs únicos, filtros, schema endpoints, rejeição de
+    campos inválidos e o endpoint /health/run (incluindo timeout e erros).
+
+tests/test_llm_service.py
+    Testes unitários do serviço de LLM. Cobre _build_user_message,
+    _normalize_response, _parse_json_safe, _attempt_analysis (com mock do
+    ChatOllama) e generate_analysis (retry, fallback, recuperação após falha
+    transitória). Inclui um teste de conectividade real com o Ollama local e
+    testes do rate limiter.
+
+tests/test_security.py
+    Testes unitários do scanner de dados sensíveis. Organizado em classes por
+    categoria: credenciais key=value, chaves PEM, access keys AWS, strings de
+    conexão, tokens GitHub/Google/Slack, cabeçalhos Authorization. Cobre também
+    casos que NÃO devem ser flagados (menção de palavra sem valor, valor curto
+    demais etc.).
